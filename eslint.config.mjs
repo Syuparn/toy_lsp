@@ -1,6 +1,6 @@
 /**
  * ESLint configuration for the project.
- * 
+ *
  * See https://eslint.style and https://typescript-eslint.io for additional linting options.
  */
 // @ts-check
@@ -39,6 +39,15 @@ export default tseslint.config(
 					'argsIgnorePattern': '^_'
 				}
 			]
+		}
+	},
+	{
+		files: ['**/jest.config.js'],
+		languageOptions: {
+			globals: {
+				module: 'readonly',
+				require: 'readonly',
+			}
 		}
 	}
 );

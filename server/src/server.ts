@@ -12,12 +12,16 @@ import {
 	TextDocumentSyncKind,
 	InitializeResult,
 	DocumentDiagnosticReportKind,
-	type DocumentDiagnosticReport
+	type DocumentDiagnosticReport,
+	SemanticTokensBuilder,
+	SemanticTokensParams
 } from 'vscode-languageserver/node';
 
 import {
 	TextDocument
 } from 'vscode-languageserver-textdocument';
+
+import { tokenize, TokenKind } from './lexer';
 
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
@@ -25,6 +29,14 @@ const connection = createConnection(ProposedFeatures.all);
 
 // Create a simple text document manager.
 const documents = new TextDocuments(TextDocument);
+
+// Semantic token types and modifiers
+const tokenTypes = ['keyword', 'function', 'variable', 'number', 'comment', 'operator'];
+
+const legend = {
+	tokenTypes,
+	tokenModifiers: [],
+};
 
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
@@ -57,6 +69,10 @@ connection.onInitialize((params: InitializeParams) => {
 			diagnosticProvider: {
 				interFileDependencies: false,
 				workspaceDiagnostics: false
+			},
+			semanticTokensProvider: {
+				legend,
+				full: true // semantic tokens for a full document
 			}
 		}
 	};
@@ -203,6 +219,68 @@ async function validateTextDocument(textDocument: TextDocument): Promise<Diagnos
 connection.onDidChangeWatchedFiles(_change => {
 	// Monitored files have change in VSCode
 	connection.console.log('We received a file change event');
+});
+
+// Semantic tokens handler
+connection.languages.semanticTokens.on((params: SemanticTokensParams) => {
+	const document = documents.get(params.textDocument.uri);
+	if (!document) {
+		return { data: [] };
+	}
+
+	const text = document.getText();
+	const tokens = tokenize(params.textDocument.uri, text);
+	const builder = new SemanticTokensBuilder();
+
+	// Helper function to map token kind to semantic token type
+	function getTokenType(kind: TokenKind, nextKind?: TokenKind): number {
+		// Keywords
+		if (kind === 'return' || kind === 'var' || kind === 'def') {
+			return tokenTypes.indexOf('keyword');
+		}
+		// Numbers
+		if (kind === 'NUMBER') {
+			return tokenTypes.indexOf('number');
+		}
+		// Comments
+		if (kind === 'COMMENT') {
+			return tokenTypes.indexOf('comment');
+		}
+		// Operators
+		if (kind === '+' || kind === '-' || kind === '*' || kind === '/' ||
+			kind === '<' || kind === '>' || kind === '=') {
+			return tokenTypes.indexOf('operator');
+		}
+		// Identifiers
+		// HACK: check if next token is '(' for function vs variable
+		if (kind === 'IDENTIFIER') {
+			if (nextKind === '(') {
+				return tokenTypes.indexOf('function');
+			}
+			return tokenTypes.indexOf('variable');
+		}
+		// Default to -1 for unsupported tokens
+		return -1;
+	}
+
+	// Iterate through tokens and build semantic tokens
+	for (let i = 0; i < tokens.length; i++) {
+		const token = tokens[i];
+		const nextToken = i + 1 < tokens.length ? tokens[i + 1] : undefined;
+
+		const tokenType = getTokenType(token.kind, nextToken?.kind);
+		if (tokenType === -1) {
+			continue; // Skip tokens we don't highlight
+		}
+
+		const line = token.location.range.start.line;
+		const char = token.location.range.start.character;
+		const length = token.text.length;
+
+		builder.push(line, char, length, tokenType, 0);
+	}
+
+	return builder.build();
 });
 
 // This handler provides the initial list of the completion items.
