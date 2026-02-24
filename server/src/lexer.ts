@@ -11,7 +11,7 @@ export type TokenKind =
 	// Literals and identifiers
 	| "IDENTIFIER" | "NUMBER"
 	// Special
-	| "COMMENT" | "EOF";
+	| "COMMENT" | "EOF" | "UNKNOWN";
 
 export interface Token {
 	kind: TokenKind;
@@ -43,201 +43,211 @@ const SINGLE_CHAR_TOKENS: Record<string, TokenKind> = {
 	'/': '/',
 };
 
-export function tokenize(uri: string, src: string): Token[] {
-	const tokens: Token[] = [];
-	let pos = 0;
+export class Tokenizer {
+	pos: number;
+	line: number;
+	character: number;
+	tokenStartLine: number;
+	tokenStartCharacter: number;
 
-	function isEOF(): boolean {
-		return pos >= src.length;
+	constructor(
+		public uri: string,
+		public src: string,
+	){
+		this.pos = 0;
+		this.line = 0;
+		this.character = 0;
+		this.tokenStartLine = 0;
+		this.tokenStartCharacter = 0;
 	}
 
-	function peek(offset = 0): string | null {
-		if (pos + offset >= src.length) {
+	private markTokenStart(): void {
+		this.tokenStartLine = this.line;
+		this.tokenStartCharacter = this.character;
+	}
+
+	private isEOF(): boolean {
+		return this.pos >= this.src.length;
+	}
+
+	private peek(offset = 0): string | null {
+		if (this.pos + offset >= this.src.length) {
 			return null;
 		}
-		return src[pos + offset];
+		return this.src[this.pos + offset];
 	}
 
-	function advance(): string {
-		return src[pos++];
+	private advance(): string {
+		const ch = this.src[this.pos++];
+		if (ch === '\n') {
+			this.line++;
+			this.character = 0;
+		} else {
+			this.character++;
+		}
+		return ch;
 	}
 
-	function skipWhitespace(): void {
-		while (!isEOF()) {
-			const ch = peek();
+	private skipWhitespace(): void {
+		while (!this.isEOF()) {
+			const ch = this.peek();
 			if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
-				advance();
+				this.advance();
 			} else {
 				break;
 			}
 		}
 	}
 
-	function lexComment(start: number): Token {
+	private lexComment(start: number): Token {
 		// Skip the '#' character (already consumed)
-		while (!isEOF() && peek() !== '\n') {
-			advance();
+		while (!this.isEOF() && this.peek() !== '\n') {
+			this.advance();
 		}
 
 		return {
 			kind: 'COMMENT',
-			text: src.substring(start, pos),
-			location: makeLocation(start, pos)
+			text: this.src.substring(start, this.pos),
+			location: this.makeLocation()
 		};
 	}
 
-	function makeLocation(start: number, end: number): Location {
-		// Simple position calculation (line/column)
-		let line = 0;
-		let col = 0;
-		for (let i = 0; i < start; i++) {
-			if (src[i] === '\n') {
-				line++;
-				col = 0;
-			} else {
-				col++;
-			}
-		}
-
-		let endLine = line;
-		let endCol = col;
-		for (let i = start; i < end; i++) {
-			if (src[i] === '\n') {
-				endLine++;
-				endCol = 0;
-			} else {
-				endCol++;
-			}
-		}
-
+	private makeLocation(): Location {
 		return {
-			uri,
+			uri: this.uri,
 			range: {
-				start: { line, character: col },
-				end: { line: endLine, character: endCol }
+				start: { line: this.tokenStartLine, character: this.tokenStartCharacter },
+				end: { line: this.line, character: this.character }
 			}
 		};
 	}
 
-	function lexIdentifier(start: number): Token {
-		while (!isEOF()) {
-			const ch = peek();
+	private lexIdentifier(start: number): Token {
+		while (!this.isEOF()) {
+			const ch = this.peek();
 			if (ch && /[a-zA-Z0-9_$.]/.test(ch)) {
-				advance();
+				this.advance();
 			} else {
 				break;
 			}
 		}
 
-		const text = src.substring(start, pos);
+		const text = this.src.substring(start, this.pos);
 		const kind: TokenKind = KEYWORDS[text] || 'IDENTIFIER';
 		return {
 			kind,
 			text,
-			location: makeLocation(start, pos)
+			location: this.makeLocation()
 		};
 	}
 
-	function lexNumber(start: number): Token {
-		const firstChar = src[start];
+	private lexNumber(start: number): Token {
+		const firstChar = this.src[start];
 
 		// Check for hexadecimal
-		if (firstChar === '0' && peek() === 'x') {
-			advance(); // skip 'x'
+		if (firstChar === '0' && this.peek() === 'x') {
+			this.advance(); // skip 'x'
 			// NOTE: Toy CANNOT handle negative value because the original lexer uses C++ `isdigit()` to lex number token
 			// https://github.com/llvm/llvm-project/blob/main/mlir/examples/toy/Ch7/include/toy/Lexer.h
-			while (!isEOF() && /[0-9a-fA-F]/.test(peek()!)) {
-				advance();
+			while (!this.isEOF() && /[0-9a-fA-F]/.test(this.peek()!)) {
+				this.advance();
 			}
 			return {
 				kind: 'NUMBER',
-				text: src.substring(start, pos),
-				location: makeLocation(start, pos)
+				text: this.src.substring(start, this.pos),
+				location: this.makeLocation()
 			};
 		}
 
 		// Decimal number
-		while (!isEOF() && /[0-9]/.test(peek()!)) {
-			advance();
+		while (!this.isEOF() && /[0-9]/.test(this.peek()!)) {
+			this.advance();
 		}
 
 		// Check for fractional part
-		if (peek() === '.' && peek(1) && /[0-9]/.test(peek(1)!)) {
-			advance(); // skip '.'
-			while (!isEOF() && /[0-9]/.test(peek()!)) {
-				advance();
+		if (this.peek() === '.' && this.peek(1) && /[0-9]/.test(this.peek(1)!)) {
+			this.advance(); // skip '.'
+			while (!this.isEOF() && /[0-9]/.test(this.peek()!)) {
+				this.advance();
 			}
 
 			// Check for exponent
-			if (peek() === 'e' || peek() === 'E') {
-				advance();
-				if (peek() === '+' || peek() === '-') {
-					advance();
+			if (this.peek() === 'e' || this.peek() === 'E') {
+				this.advance();
+				if (this.peek() === '+' || this.peek() === '-') {
+					this.advance();
 				}
-				while (!isEOF() && /[0-9]/.test(peek()!)) {
-					advance();
+				while (!this.isEOF() && /[0-9]/.test(this.peek()!)) {
+					this.advance();
 				}
 			}
 		}
 
 		return {
 			kind: 'NUMBER',
-			text: src.substring(start, pos),
-			location: makeLocation(start, pos)
+			text: this.src.substring(start, this.pos),
+			location: this.makeLocation()
 		};
 	}
 
-	// Main tokenization loop
-	while (true) {
-		skipWhitespace();
+	tokenize(): Token {
+		this.skipWhitespace();
+		this.markTokenStart();
 
-		if (isEOF()) {
-			const eofPos = pos;
-			tokens.push({
+		if (this.isEOF()) {
+			return {
 				kind: 'EOF',
 				text: '',
-				location: makeLocation(eofPos, eofPos)
-			});
-			break;
+				location: this.makeLocation()
+			};
 		}
 
-		const start = pos;
-		const ch = advance();
+		const start = this.pos;
+		const ch = this.advance();
 
 		// Comment
 		if (ch === '#') {
-			const token = lexComment(start);
-			tokens.push(token);
-			continue;
+			return this.lexComment(start);
 		}
 
 		// Identifier or keyword
 		if (/[a-zA-Z_]/.test(ch)) {
-			const token = lexIdentifier(start);
-			tokens.push(token);
-			continue;
+			return this.lexIdentifier(start);
 		}
 
 		// Number
 		if (/[0-9]/.test(ch)) {
-			const token = lexNumber(start);
-			tokens.push(token);
-			continue;
+			return this.lexNumber(start);
 		}
 
 		// Single character tokens
 		const singleCharKind = SINGLE_CHAR_TOKENS[ch];
 		if (singleCharKind) {
-			tokens.push({
+			return {
 				kind: singleCharKind,
 				text: ch,
-				location: makeLocation(start, pos)
-			});
-			continue;
+				location: this.makeLocation()
+			};
 		}
 
-		// Unknown character - for now, skip it
-		// In a real implementation, this should throw an error
+		// Unknown character
+		return {
+			kind: 'UNKNOWN',
+			text: ch,
+			location: this.makeLocation()
+		};
+	}
+}
+
+export function tokenizeAll(uri: string, src: string): Token[] {
+	const tokens: Token[] = [];
+	const tokenizer = new Tokenizer(uri, src);
+	while (true) {
+		const token = tokenizer.tokenize();
+		tokens.push(token);
+		if (token.kind === "EOF") {
+			break;
+		}
 	}
 
 	return tokens;

@@ -21,7 +21,7 @@ import {
 	TextDocument
 } from 'vscode-languageserver-textdocument';
 
-import { tokenize, TokenKind } from './lexer';
+import { tokenizeAll, TokenKind } from './lexer';
 
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
@@ -229,7 +229,7 @@ connection.languages.semanticTokens.on((params: SemanticTokensParams) => {
 	}
 
 	const text = document.getText();
-	const tokens = tokenize(params.textDocument.uri, text);
+	const tokens = tokenizeAll(params.textDocument.uri, text);
 	const builder = new SemanticTokensBuilder();
 
 	// Helper function to map token kind to semantic token type
