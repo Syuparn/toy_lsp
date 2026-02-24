@@ -144,6 +144,8 @@ export function tokenize(uri: string, src: string): Token[] {
 		// Check for hexadecimal
 		if (firstChar === '0' && peek() === 'x') {
 			advance(); // skip 'x'
+			// NOTE: Toy CANNOT handle negative value because the original lexer uses C++ `isdigit()` to lex number token
+			// https://github.com/llvm/llvm-project/blob/main/mlir/examples/toy/Ch7/include/toy/Lexer.h
 			while (!isEOF() && /[0-9a-fA-F]/.test(peek()!)) {
 				advance();
 			}
