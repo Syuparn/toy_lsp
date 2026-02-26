@@ -74,7 +74,7 @@ describe('peekPrecedence', () => {
   it('precedence: other', () => {
     const tokenizer = new Tokenizer(uri, 'return a');
     const parser = new Parser(tokenizer);
-    expect(parser.peekPrecedence()).toBe(PRESEDENSE.LOWESt);
+    expect(parser.peekPrecedence()).toBe(PRESEDENSE.LOWEST);
   });
 });
 
@@ -86,6 +86,14 @@ describe('Number', () => {
     const parser = new Parser(tokenizer);
     expect(parser.parseNumber()).toStrictEqual(new NumberExprAST(toLoc(uri, 0, 0, 0, 1), 1));
   });
+
+  it('parse number as expression', () => {
+    const tokenizer = new Tokenizer(uri, '1');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+      new NumberExprAST(toLoc(uri, 0, 0, 0, 1), 1)
+    );
+  });
 });
 
 describe('Variable', () => {
@@ -95,6 +103,14 @@ describe('Variable', () => {
     const tokenizer = new Tokenizer(uri, 'foo');
     const parser = new Parser(tokenizer);
     expect(parser.parseVariable()).toStrictEqual(
+      new VariableExprAST(toLoc(uri, 0, 0, 0, 3), 'foo')
+    );
+  });
+
+  it('parse variable as expression', () => {
+    const tokenizer = new Tokenizer(uri, 'foo');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
       new VariableExprAST(toLoc(uri, 0, 0, 0, 3), 'foo')
     );
   });

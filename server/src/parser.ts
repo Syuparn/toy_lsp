@@ -1,6 +1,6 @@
 import { Location } from 'vscode-languageserver';
 import { Token, Tokenizer, TokenKind } from './lexer';
-import { NumberExprAST, VariableExprAST } from './ast';
+import { ExprAST, MissingAST, NumberExprAST, VariableExprAST } from './ast';
 
 export interface Diagnostic {
   location: Location;
@@ -8,24 +8,15 @@ export interface Diagnostic {
 }
 
 export const PRESEDENSE = {
-  LOWESt: 0,
+  LOWEST: 0,
   ASSIGNMENT: 10,
   COMPARISON: 20,
   ADDITIVE: 30,
   MULTIPLICATIVE: 40,
 } as const;
 
-const precedences: Record<TokenKind, number> = {
-  // Punctuation (not used as binary operators)
-  ';': PRESEDENSE.LOWESt,
-  '(': PRESEDENSE.LOWESt,
-  ')': PRESEDENSE.LOWESt,
-  '{': PRESEDENSE.LOWESt,
-  '}': PRESEDENSE.LOWESt,
-  '[': PRESEDENSE.LOWESt,
-  ']': PRESEDENSE.LOWESt,
-  ',': PRESEDENSE.LOWESt,
-  // Assignment (lowest precedence among operators)
+const precedences: Partial<Record<TokenKind, number>> = {
+  // Assignment (LOWEST precedence among operators)
   '=': PRESEDENSE.ASSIGNMENT,
   // Comparison operators
   '<': PRESEDENSE.COMPARISON,
@@ -36,28 +27,19 @@ const precedences: Record<TokenKind, number> = {
   // Multiplicative operators (highest precedence)
   '*': PRESEDENSE.MULTIPLICATIVE,
   '/': PRESEDENSE.MULTIPLICATIVE,
-  // Keywords (not used as operators)
-  return: PRESEDENSE.LOWESt,
-  var: PRESEDENSE.LOWESt,
-  def: PRESEDENSE.LOWESt,
-  // Literals and identifiers
-  IDENTIFIER: PRESEDENSE.LOWESt,
-  NUMBER: PRESEDENSE.LOWESt,
-  // Special tokens
-  COMMENT: PRESEDENSE.LOWESt,
-  EOF: PRESEDENSE.LOWESt,
-  UNKNOWN: PRESEDENSE.LOWESt,
 } as const;
 
 export class Parser {
   curToken: Token;
   peekToken: Token;
   diagnostics: Diagnostic[];
+  prefixParseFns: Partial<Record<TokenKind, () => ExprAST>>;
 
   constructor(public readonly tokenizer: Tokenizer) {
     this.curToken = tokenizer.tokenize();
     this.peekToken = tokenizer.tokenize();
     this.diagnostics = [];
+    this.prefixParseFns = this.initPrefixParseFns();
   }
 
   match(tokenKinds: TokenKind[]) {
@@ -70,7 +52,7 @@ export class Parser {
   }
 
   peekPrecedence() {
-    return precedences[this.peekToken.kind];
+    return precedences[this.peekToken.kind] ?? PRESEDENSE.LOWEST;
   }
 
   expect(tokenKinds: TokenKind[], errMessage: string) {
@@ -89,6 +71,14 @@ export class Parser {
     this.peekToken = this.tokenizer.tokenize();
   }
 
+  private initPrefixParseFns() {
+    // NOTE: bind is nesessary, otherwise the functions cannot refer `this`
+    return {
+      NUMBER: this.parseNumber.bind(this),
+      IDENTIFIER: this.parseVariable.bind(this),
+    };
+  }
+
   dummyToken(prevToken: Token): Token {
     return {
       kind: 'UNKNOWN',
@@ -101,6 +91,25 @@ export class Parser {
         },
       },
     };
+  }
+
+  parseExpression(precedence: number) {
+    const prefix = this.prefixParseFns[this.curToken.kind];
+    if (prefix === undefined) {
+      // TODO: make proper error message
+      this.expect([], `token ${this.curToken.text} cannot be parsed as a prefix`);
+      return new MissingAST(this.curToken.location);
+    }
+
+    const left = prefix();
+
+    // create RHS AST recursively while the right binding power is stronger than the left one.
+    while (this.peekToken.kind !== ';' && precedence < this.peekPrecedence()) {
+      // TODO: handle infix
+      return left;
+    }
+
+    return left;
   }
 
   parseNumber() {
