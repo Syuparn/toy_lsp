@@ -4,11 +4,13 @@ import {
   CallExprAST,
   ExprAST,
   ExprStmtAST,
+  FunctionAST,
   InfixExprAST,
   LiteralExprAST,
   MissingAST,
   NumberExprAST,
   ReturnStmtAST,
+  StmtAST,
   VarDeclStmtAST,
   VariableExprAST,
 } from './ast';
@@ -133,6 +135,76 @@ export class Parser {
         },
       },
     };
+  }
+
+  parseFunction() {
+    const loc = this.curToken.location; // def
+
+    let name = '<UNKNOWN!>';
+    if (this.match(['IDENTIFIER'])) {
+      this.nextToken();
+      name = this.curToken.text;
+    } else {
+      // error: identifier is missing, skip until '(' is found
+      this.addDiagnostic(`'${this.peekToken.text}' is not an identifier`);
+      while (!this.match(['(', 'EOF'])) {
+        this.nextToken();
+      }
+    }
+
+    this.expect(['('], "'(' is missing");
+    const params = this.parseParameters();
+    this.expect([')'], "')' is missing");
+    this.expect(['{'], "'{' is missing");
+    const body = this.parseBody();
+    this.expect(['}'], "'}' is missing");
+
+    return new FunctionAST(loc, name, params, body);
+  }
+
+  parseParameters() {
+    const params: VariableExprAST[] = [];
+
+    // empty or error (missing ))
+    if (this.match([')', '{'])) {
+      return [];
+    }
+
+    this.nextToken(); // current: first param
+    if (this.curToken.kind === 'IDENTIFIER') {
+      params.push(this.parseVariable());
+    } else {
+      this.addDiagnostic(`'${this.curToken.text}' is not an identifier`);
+    }
+
+    while (this.match([',', 'IDENTIFIER'])) {
+      this.expect([','], "',' is missing");
+      this.nextToken(); // current: next param
+      if (this.curToken.kind === 'IDENTIFIER') {
+        params.push(this.parseVariable());
+      } else {
+        this.addDiagnostic(`'${this.curToken.text}' is not an identifier`);
+      }
+    }
+
+    return params;
+  }
+
+  parseBody() {
+    const stmts: StmtAST[] = [];
+
+    // empty
+    if (this.match(['}'])) {
+      return [];
+    }
+
+    this.nextToken(); // current: first statement
+    while (this.curToken.kind !== '}' && this.curToken.kind !== 'EOF') {
+      stmts.push(this.parseStatement());
+      this.nextToken();
+    }
+
+    return stmts;
   }
 
   parseStatement() {

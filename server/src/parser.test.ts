@@ -3,6 +3,7 @@ import { Tokenizer } from './lexer';
 import {
   CallExprAST,
   ExprStmtAST,
+  FunctionAST,
   InfixExprAST,
   LiteralExprAST,
   MissingAST,
@@ -600,5 +601,98 @@ describe('VarDeclStmt', () => {
       )
     );
     expect(parser.diagnostics[0].message).toBe('type parameter must be numbers');
+  });
+});
+
+describe('Function', () => {
+  it('empty parameters, empty body', () => {
+    const tokenizer = new Tokenizer(uri, 'def f() {\n}');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseFunction()).toStrictEqual(
+      new FunctionAST(toLoc(uri, 0, 0, 0, 3), 'f', [], [])
+    );
+  });
+
+  it('parameters', () => {
+    const tokenizer = new Tokenizer(uri, 'def f(a, b) {\n}');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseFunction()).toStrictEqual(
+      new FunctionAST(
+        toLoc(uri, 0, 0, 0, 3),
+        'f',
+        [
+          new VariableExprAST(toLoc(uri, 0, 6, 0, 7), 'a'),
+          new VariableExprAST(toLoc(uri, 0, 9, 0, 10), 'b'),
+        ],
+        []
+      )
+    );
+  });
+
+  it('body', () => {
+    const tokenizer = new Tokenizer(uri, 'def f() {\n1;\n}');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseFunction()).toStrictEqual(
+      new FunctionAST(
+        toLoc(uri, 0, 0, 0, 3),
+        'f',
+        [],
+        [new ExprStmtAST(toLoc(uri, 1, 0, 1, 1), new NumberExprAST(toLoc(uri, 1, 0, 1, 1), 1))]
+      )
+    );
+  });
+
+  it('syntax error: missing (', () => {
+    const tokenizer = new Tokenizer(uri, 'def f) {}');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseFunction()).toStrictEqual(
+      new FunctionAST(toLoc(uri, 0, 0, 0, 3), 'f', [], [])
+    );
+    expect(parser.diagnostics[0].message).toBe("'(' is missing");
+  });
+
+  it('syntax error: missing )', () => {
+    const tokenizer = new Tokenizer(uri, 'def f( {}');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseFunction()).toStrictEqual(
+      new FunctionAST(toLoc(uri, 0, 0, 0, 3), 'f', [], [])
+    );
+    expect(parser.diagnostics[0].message).toBe("')' is missing");
+  });
+
+  it('syntax error: missing {', () => {
+    const tokenizer = new Tokenizer(uri, 'def f() }');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseFunction()).toStrictEqual(
+      new FunctionAST(toLoc(uri, 0, 0, 0, 3), 'f', [], [])
+    );
+    expect(parser.diagnostics[0].message).toBe("'{' is missing");
+  });
+
+  it('syntax error: missing }', () => {
+    const tokenizer = new Tokenizer(uri, 'def f() {');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseFunction()).toStrictEqual(
+      new FunctionAST(toLoc(uri, 0, 0, 0, 3), 'f', [], [])
+    );
+    expect(parser.diagnostics[0].message).toBe("'}' is missing");
+  });
+
+  it('syntax error: missing identifier', () => {
+    const tokenizer = new Tokenizer(uri, 'def 1() {}');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseFunction()).toStrictEqual(
+      new FunctionAST(toLoc(uri, 0, 0, 0, 3), '<UNKNOWN!>', [], [])
+    );
+    expect(parser.diagnostics[0].message).toBe("'1' is not an identifier");
+  });
+
+  it('syntax error: parameter is not an identifier', () => {
+    const tokenizer = new Tokenizer(uri, 'def f(1) {}');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseFunction()).toStrictEqual(
+      new FunctionAST(toLoc(uri, 0, 0, 0, 3), 'f', [], [])
+    );
+    expect(parser.diagnostics[0].message).toBe("'1' is not an identifier");
   });
 });
