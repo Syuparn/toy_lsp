@@ -703,6 +703,7 @@ describe('Module', () => {
     const tokenizer = new Tokenizer(uri, '');
     const parser = new Parser(tokenizer);
     expect(parser.parseModule()).toStrictEqual(new ModuleAST(toLoc(uri, 0, 0, 0, 0), []));
+    expect(parser.diagnostics).toStrictEqual([]);
   });
 
   it('one function', () => {
@@ -711,6 +712,23 @@ describe('Module', () => {
     expect(parser.parseModule()).toStrictEqual(
       new ModuleAST(toLoc(uri, 0, 0, 0, 3), [new FunctionAST(toLoc(uri, 0, 0, 0, 3), 'f', [], [])])
     );
+    expect(parser.diagnostics).toStrictEqual([]);
+  });
+
+  it('function with body', () => {
+    const tokenizer = new Tokenizer(uri, 'def f() {\n1;\n}');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseModule()).toStrictEqual(
+      new ModuleAST(toLoc(uri, 0, 0, 0, 3), [
+        new FunctionAST(
+          toLoc(uri, 0, 0, 0, 3),
+          'f',
+          [],
+          [new ExprStmtAST(toLoc(uri, 1, 0, 1, 1), new NumberExprAST(toLoc(uri, 1, 0, 1, 1), 1))]
+        ),
+      ])
+    );
+    expect(parser.diagnostics).toStrictEqual([]);
   });
 
   it('two functions', () => {
@@ -722,5 +740,24 @@ describe('Module', () => {
         new FunctionAST(toLoc(uri, 2, 0, 2, 3), 'g', [], []),
       ])
     );
+    expect(parser.diagnostics).toStrictEqual([]);
+  });
+
+  it('empty lines', () => {
+    const tokenizer = new Tokenizer(uri, 'def f() {\n\n}\n');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseModule()).toStrictEqual(
+      new ModuleAST(toLoc(uri, 0, 0, 0, 3), [new FunctionAST(toLoc(uri, 0, 0, 0, 3), 'f', [], [])])
+    );
+    expect(parser.diagnostics).toStrictEqual([]);
+  });
+
+  it('ignore comments', () => {
+    const tokenizer = new Tokenizer(uri, '# comment\ndef f() {\n# comment2\n}');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseModule()).toStrictEqual(
+      new ModuleAST(toLoc(uri, 1, 0, 1, 3), [new FunctionAST(toLoc(uri, 1, 0, 1, 3), 'f', [], [])])
+    );
+    expect(parser.diagnostics).toStrictEqual([]);
   });
 });

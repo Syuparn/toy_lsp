@@ -19,7 +19,8 @@ import {
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
 
-import { tokenizeAll, TokenKind } from './lexer';
+import { tokenizeAll, Tokenizer, TokenKind } from './lexer';
+import { Parser, ToyDiagnostic } from './parser';
 
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
@@ -38,7 +39,6 @@ const legend = {
 
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
-let hasDiagnosticRelatedInformationCapability = false;
 
 connection.onInitialize((params: InitializeParams) => {
   const capabilities = params.capabilities;
@@ -48,11 +48,6 @@ connection.onInitialize((params: InitializeParams) => {
   hasConfigurationCapability = !!(capabilities.workspace && !!capabilities.workspace.configuration);
   hasWorkspaceFolderCapability = !!(
     capabilities.workspace && !!capabilities.workspace.workspaceFolders
-  );
-  hasDiagnosticRelatedInformationCapability = !!(
-    capabilities.textDocument &&
-    capabilities.textDocument.publishDiagnostics &&
-    capabilities.textDocument.publishDiagnostics.relatedInformation
   );
 
   const result: InitializeResult = {
@@ -168,44 +163,19 @@ async function validateTextDocument(textDocument: TextDocument): Promise<Diagnos
   // In this simple example we get the settings for every validate run.
   const settings = await getDocumentSettings(textDocument.uri);
 
-  // The validator creates diagnostics for all uppercase words length 2 and more
   const text = textDocument.getText();
-  const pattern = /\b[A-Z]{2,}\b/g;
-  let m: RegExpExecArray | null;
-
-  let problems = 0;
-  const diagnostics: Diagnostic[] = [];
-  while ((m = pattern.exec(text)) && problems < settings.maxNumberOfProblems) {
-    problems++;
-    const diagnostic: Diagnostic = {
+  const tokenizer = new Tokenizer(textDocument.uri, text);
+  const parser = new Parser(tokenizer);
+  parser.parseModule();
+  const diagnostics: Diagnostic[] = parser.diagnostics
+    .slice(0, settings.maxNumberOfProblems)
+    .map((d: ToyDiagnostic) => ({
       severity: DiagnosticSeverity.Warning,
-      range: {
-        start: textDocument.positionAt(m.index),
-        end: textDocument.positionAt(m.index + m[0].length),
-      },
-      message: `${m[0]} is all uppercase.`,
+      range: d.location.range,
+      message: d.message,
       source: 'ex',
-    };
-    if (hasDiagnosticRelatedInformationCapability) {
-      diagnostic.relatedInformation = [
-        {
-          location: {
-            uri: textDocument.uri,
-            range: Object.assign({}, diagnostic.range),
-          },
-          message: 'Spelling matters',
-        },
-        {
-          location: {
-            uri: textDocument.uri,
-            range: Object.assign({}, diagnostic.range),
-          },
-          message: 'Particularly for names',
-        },
-      ];
-    }
-    diagnostics.push(diagnostic);
-  }
+    }));
+
   return diagnostics;
 }
 

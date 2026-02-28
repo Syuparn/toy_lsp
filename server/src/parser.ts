@@ -16,7 +16,7 @@ import {
   VariableExprAST,
 } from './ast';
 
-export interface Diagnostic {
+export interface ToyDiagnostic {
   location: Location;
   message: string;
 }
@@ -45,7 +45,7 @@ const precedences: Partial<Record<TokenKind, number>> = {
 export class Parser {
   curToken: Token;
   peekToken: Token;
-  diagnostics: Diagnostic[];
+  diagnostics: ToyDiagnostic[];
   prefixParseFns: Partial<Record<TokenKind, () => ExprAST | MissingAST>>;
   infixParseFns: Partial<Record<TokenKind, (expr: ExprAST | MissingAST) => ExprAST | MissingAST>>;
 
@@ -93,7 +93,7 @@ export class Parser {
 
     // consume the expected token
     this.curToken = this.peekToken;
-    this.peekToken = this.tokenizer.tokenize();
+    this.peekToken = this.tokeninzeWithoutComment();
   }
 
   addDiagnostic(errMessage: string) {
@@ -204,15 +204,17 @@ export class Parser {
   parseBody() {
     const stmts: StmtAST[] = [];
 
-    // empty
-    if (this.match(['}'])) {
+    // empty or error (missing })
+    if (this.match(['}', 'EOF'])) {
       return [];
     }
 
     this.nextToken(); // current: first statement
-    while (this.curToken.kind !== '}' && this.curToken.kind !== 'EOF') {
-      stmts.push(this.parseStatement());
+    stmts.push(this.parseStatement());
+
+    while (!this.match(['}', 'EOF'])) {
       this.nextToken();
+      stmts.push(this.parseStatement());
     }
 
     return stmts;
