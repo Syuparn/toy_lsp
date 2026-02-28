@@ -3,6 +3,7 @@ import { Token, Tokenizer, TokenKind } from './lexer';
 import {
   CallExprAST,
   ExprAST,
+  InfixExprAST,
   LiteralExprAST,
   MissingAST,
   NumberExprAST,
@@ -14,37 +15,33 @@ export interface Diagnostic {
   message: string;
 }
 
-export const PRESEDENSE = {
+export const PRESEDENCE = {
   LOWEST: 0,
   ASSIGNMENT: 10,
-  COMPARISON: 20,
-  ADDITIVE: 30,
-  MULTIPLICATIVE: 40,
-  CALL: 50,
+  ADDITIVE: 20,
+  MULTIPLICATIVE: 30,
+  CALL: 40,
 } as const;
 
 const precedences: Partial<Record<TokenKind, number>> = {
   // Assignment (LOWEST precedence among operators)
-  '=': PRESEDENSE.ASSIGNMENT,
-  // Comparison operators
-  '<': PRESEDENSE.COMPARISON,
-  '>': PRESEDENSE.COMPARISON,
+  '=': PRESEDENCE.ASSIGNMENT,
   // Additive operators
-  '+': PRESEDENSE.ADDITIVE,
-  '-': PRESEDENSE.ADDITIVE,
+  '+': PRESEDENCE.ADDITIVE,
+  '-': PRESEDENCE.ADDITIVE,
   // Multiplicative operators
-  '*': PRESEDENSE.MULTIPLICATIVE,
-  '/': PRESEDENSE.MULTIPLICATIVE,
+  '*': PRESEDENCE.MULTIPLICATIVE,
+  '/': PRESEDENCE.MULTIPLICATIVE,
   // Call operators
-  '(': PRESEDENSE.CALL,
+  '(': PRESEDENCE.CALL,
 } as const;
 
 export class Parser {
   curToken: Token;
   peekToken: Token;
   diagnostics: Diagnostic[];
-  prefixParseFns: Partial<Record<TokenKind, () => ExprAST>>;
-  infixParseFns: Partial<Record<TokenKind, (expr: ExprAST) => ExprAST>>;
+  prefixParseFns: Partial<Record<TokenKind, () => ExprAST | MissingAST>>;
+  infixParseFns: Partial<Record<TokenKind, (expr: ExprAST | MissingAST) => ExprAST | MissingAST>>;
 
   constructor(public readonly tokenizer: Tokenizer) {
     this.curToken = this.tokeninzeWithoutComment();
@@ -72,8 +69,12 @@ export class Parser {
     return next;
   }
 
+  curPrecedence() {
+    return precedences[this.curToken.kind] ?? PRESEDENCE.LOWEST;
+  }
+
   peekPrecedence() {
-    return precedences[this.peekToken.kind] ?? PRESEDENSE.LOWEST;
+    return precedences[this.peekToken.kind] ?? PRESEDENCE.LOWEST;
   }
 
   expect(tokenKinds: TokenKind[], errMessage: string) {
@@ -102,6 +103,7 @@ export class Parser {
       NUMBER: this.parseNumber.bind(this),
       IDENTIFIER: this.parseVariable.bind(this),
       '[': this.parseLiteral.bind(this),
+      '(': this.parseGroup.bind(this),
     };
   }
 
@@ -109,6 +111,10 @@ export class Parser {
     // NOTE: bind is nesessary, otherwise the functions cannot refer `this`
     return {
       '(': this.parseCall.bind(this),
+      '+': this.parseInfix.bind(this),
+      '-': this.parseInfix.bind(this),
+      '*': this.parseInfix.bind(this),
+      '/': this.parseInfix.bind(this),
     };
   }
 
@@ -161,31 +167,11 @@ export class Parser {
 
   parseLiteral() {
     const loc = this.curToken.location;
-    const values: (ExprAST | MissingAST)[] = [];
-
-    // empty
-    if (this.match([']'])) {
-      this.nextToken();
-      return new LiteralExprAST(loc, []);
-    }
-
-    this.nextToken(); // current: value
-    values.push(this.parseExpression(PRESEDENSE.LOWEST));
-
-    while (this.match([',', 'IDENTIFIER', 'NUMBER'])) {
-      this.expect([','], "',' is missing");
-      this.nextToken(); // current: next value
-      values.push(this.parseExpression(PRESEDENSE.LOWEST));
-    }
-
-    this.expect([']'], "']' is missing");
-
+    const values = this.parseExpressions(']');
     return new LiteralExprAST(loc, values);
   }
 
-  parseCall(func: ExprAST) {
-    const args: (ExprAST | MissingAST)[] = [];
-
+  parseCall(func: ExprAST | MissingAST) {
     let name = '<UNKNOWN!>';
     if (func instanceof VariableExprAST) {
       name = func.name;
@@ -193,23 +179,49 @@ export class Parser {
       this.addDiagnostic(`'${func.dump()}' is not a function name`);
     }
 
+    const args = this.parseExpressions(')');
+    return new CallExprAST(func.loc, name, args);
+  }
+
+  parseExpressions(endKind: TokenKind) {
+    const exprs: (ExprAST | MissingAST)[] = [];
+
     // empty
-    if (this.match([')'])) {
+    if (this.match([endKind])) {
       this.nextToken();
-      return new CallExprAST(func.loc, name, []);
+      return [];
     }
 
-    this.nextToken(); // current: arg
-    args.push(this.parseExpression(PRESEDENSE.LOWEST));
+    this.nextToken(); // current: value
+    exprs.push(this.parseExpression(PRESEDENCE.LOWEST));
 
     while (this.match([',', 'IDENTIFIER', 'NUMBER'])) {
       this.expect([','], "',' is missing");
-      this.nextToken(); // current: next arg
-      args.push(this.parseExpression(PRESEDENSE.LOWEST));
+      this.nextToken(); // current: next value
+      exprs.push(this.parseExpression(PRESEDENCE.LOWEST));
     }
 
-    this.expect([')'], "')' is missing");
+    this.expect([endKind], `'${endKind}' is missing`);
+    return exprs;
+  }
 
-    return new CallExprAST(func.loc, name, args);
+  parseInfix(left: ExprAST | MissingAST) {
+    const loc = this.curToken.location;
+    const op = this.curToken.text;
+
+    const precedence = this.curPrecedence();
+    this.nextToken(); // current: right value
+    const right = this.parseExpression(precedence);
+    return new InfixExprAST(loc, left, op, right);
+  }
+
+  parseGroup() {
+    this.nextToken(); // current: value
+
+    // set presedence LOWEST for right binding
+    const expr = this.parseExpression(PRESEDENCE.LOWEST);
+    this.expect([')'], `')' is missing`);
+
+    return expr;
   }
 }

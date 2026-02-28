@@ -37,9 +37,9 @@ export class NumberExprAST {
 export class InfixExprAST {
   constructor(
     public readonly loc: Location,
-    public readonly left: ExprAST,
+    public readonly left: ExprAST | MissingAST,
     public readonly op: string,
-    public readonly right: ExprAST
+    public readonly right: ExprAST | MissingAST
   ) {}
 
   dump(): string {

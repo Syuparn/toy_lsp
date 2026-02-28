@@ -1,6 +1,13 @@
-import { Parser, PRESEDENSE } from './parser';
+import { Parser, PRESEDENCE } from './parser';
 import { Tokenizer } from './lexer';
-import { CallExprAST, LiteralExprAST, MissingAST, NumberExprAST, VariableExprAST } from './ast';
+import {
+  CallExprAST,
+  InfixExprAST,
+  LiteralExprAST,
+  MissingAST,
+  NumberExprAST,
+  VariableExprAST,
+} from './ast';
 
 const uri = 'test://test.toy';
 
@@ -54,31 +61,31 @@ describe('peekPrecedence', () => {
   it('precedence: +', () => {
     const tokenizer = new Tokenizer(uri, '1 + 2');
     const parser = new Parser(tokenizer);
-    expect(parser.peekPrecedence()).toBe(PRESEDENSE.ADDITIVE);
+    expect(parser.peekPrecedence()).toBe(PRESEDENCE.ADDITIVE);
   });
 
   it('precedence: *', () => {
     const tokenizer = new Tokenizer(uri, '1 * 2');
     const parser = new Parser(tokenizer);
-    expect(parser.peekPrecedence()).toBe(PRESEDENSE.MULTIPLICATIVE);
+    expect(parser.peekPrecedence()).toBe(PRESEDENCE.MULTIPLICATIVE);
   });
 
   it('precedence: ()', () => {
     const tokenizer = new Tokenizer(uri, 'foo()');
     const parser = new Parser(tokenizer);
-    expect(parser.peekPrecedence()).toBe(PRESEDENSE.CALL);
+    expect(parser.peekPrecedence()).toBe(PRESEDENCE.CALL);
   });
 
   it('precedence: =', () => {
     const tokenizer = new Tokenizer(uri, 'a = 2');
     const parser = new Parser(tokenizer);
-    expect(parser.peekPrecedence()).toBe(PRESEDENSE.ASSIGNMENT);
+    expect(parser.peekPrecedence()).toBe(PRESEDENCE.ASSIGNMENT);
   });
 
   it('precedence: other', () => {
     const tokenizer = new Tokenizer(uri, 'return a');
     const parser = new Parser(tokenizer);
-    expect(parser.peekPrecedence()).toBe(PRESEDENSE.LOWEST);
+    expect(parser.peekPrecedence()).toBe(PRESEDENCE.LOWEST);
   });
 });
 
@@ -86,7 +93,7 @@ describe('Number', () => {
   it('parse number', () => {
     const tokenizer = new Tokenizer(uri, '1');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new NumberExprAST(toLoc(uri, 0, 0, 0, 1), 1)
     );
   });
@@ -96,7 +103,7 @@ describe('Variable', () => {
   it('parse variable', () => {
     const tokenizer = new Tokenizer(uri, 'foo');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new VariableExprAST(toLoc(uri, 0, 0, 0, 3), 'foo')
     );
   });
@@ -106,7 +113,7 @@ describe('Literal', () => {
   it('parse literal (empty)', () => {
     const tokenizer = new Tokenizer(uri, '[]');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new LiteralExprAST(toLoc(uri, 0, 0, 0, 1), [])
     );
   });
@@ -114,7 +121,7 @@ describe('Literal', () => {
   it('parse literal (1 element)', () => {
     const tokenizer = new Tokenizer(uri, '[1]');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new LiteralExprAST(toLoc(uri, 0, 0, 0, 1), [new NumberExprAST(toLoc(uri, 0, 1, 0, 2), 1)])
     );
   });
@@ -122,7 +129,7 @@ describe('Literal', () => {
   it('parse literal (2 elements)', () => {
     const tokenizer = new Tokenizer(uri, '[1, 2]');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new LiteralExprAST(toLoc(uri, 0, 0, 0, 1), [
         new NumberExprAST(toLoc(uri, 0, 1, 0, 2), 1),
         new NumberExprAST(toLoc(uri, 0, 4, 0, 5), 2),
@@ -133,7 +140,7 @@ describe('Literal', () => {
   it('parse literal (matrix)', () => {
     const tokenizer = new Tokenizer(uri, '[[1, 2], [3, 4]]');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new LiteralExprAST(toLoc(uri, 0, 0, 0, 1), [
         new LiteralExprAST(toLoc(uri, 0, 1, 0, 2), [
           new NumberExprAST(toLoc(uri, 0, 2, 0, 3), 1),
@@ -151,7 +158,7 @@ describe('Literal', () => {
   it('parse invalid literal', () => {
     const tokenizer = new Tokenizer(uri, '[a]');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new LiteralExprAST(toLoc(uri, 0, 0, 0, 1), [new VariableExprAST(toLoc(uri, 0, 1, 0, 2), 'a')])
     );
   });
@@ -159,7 +166,7 @@ describe('Literal', () => {
   it('syntax error: missing ]', () => {
     const tokenizer = new Tokenizer(uri, '[1');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new LiteralExprAST(toLoc(uri, 0, 0, 0, 1), [new NumberExprAST(toLoc(uri, 0, 1, 0, 2), 1)])
     );
     expect(parser.diagnostics[0].message).toBe("']' is missing");
@@ -168,7 +175,7 @@ describe('Literal', () => {
   it('syntax error: missing ] (;)', () => {
     const tokenizer = new Tokenizer(uri, '[1;');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new LiteralExprAST(toLoc(uri, 0, 0, 0, 1), [new NumberExprAST(toLoc(uri, 0, 1, 0, 2), 1)])
     );
     expect(parser.diagnostics[0].message).toBe("']' is missing");
@@ -177,7 +184,7 @@ describe('Literal', () => {
   it('syntax error: missing ,', () => {
     const tokenizer = new Tokenizer(uri, '[1 2]');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new LiteralExprAST(toLoc(uri, 0, 0, 0, 1), [
         new NumberExprAST(toLoc(uri, 0, 1, 0, 2), 1),
         new NumberExprAST(toLoc(uri, 0, 3, 0, 4), 2),
@@ -189,7 +196,7 @@ describe('Literal', () => {
   it('syntax error: nest', () => {
     const tokenizer = new Tokenizer(uri, '[[1]');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new LiteralExprAST(toLoc(uri, 0, 0, 0, 1), [
         new LiteralExprAST(toLoc(uri, 0, 1, 0, 2), [new NumberExprAST(toLoc(uri, 0, 2, 0, 3), 1)]),
       ])
@@ -202,7 +209,7 @@ describe('Call', () => {
   it('parse call (empty)', () => {
     const tokenizer = new Tokenizer(uri, 'f()');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new CallExprAST(toLoc(uri, 0, 0, 0, 1), 'f', [])
     );
   });
@@ -210,7 +217,7 @@ describe('Call', () => {
   it('parse literal (1 arg)', () => {
     const tokenizer = new Tokenizer(uri, 'f(1)');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new CallExprAST(toLoc(uri, 0, 0, 0, 1), 'f', [new NumberExprAST(toLoc(uri, 0, 2, 0, 3), 1)])
     );
   });
@@ -218,7 +225,7 @@ describe('Call', () => {
   it('parse literal (2 args)', () => {
     const tokenizer = new Tokenizer(uri, 'f(1, 2)');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new CallExprAST(toLoc(uri, 0, 0, 0, 1), 'f', [
         new NumberExprAST(toLoc(uri, 0, 2, 0, 3), 1),
         new NumberExprAST(toLoc(uri, 0, 5, 0, 6), 2),
@@ -229,7 +236,7 @@ describe('Call', () => {
   it('syntax error: missing )', () => {
     const tokenizer = new Tokenizer(uri, 'f(1');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new CallExprAST(toLoc(uri, 0, 0, 0, 1), 'f', [new NumberExprAST(toLoc(uri, 0, 2, 0, 3), 1)])
     );
     expect(parser.diagnostics[0].message).toBe("')' is missing");
@@ -238,7 +245,7 @@ describe('Call', () => {
   it('syntax error: missing ) (;)', () => {
     const tokenizer = new Tokenizer(uri, 'f(1;');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new CallExprAST(toLoc(uri, 0, 0, 0, 1), 'f', [new NumberExprAST(toLoc(uri, 0, 2, 0, 3), 1)])
     );
     expect(parser.diagnostics[0].message).toBe("')' is missing");
@@ -247,7 +254,7 @@ describe('Call', () => {
   it('syntax error: missing ,', () => {
     const tokenizer = new Tokenizer(uri, 'f(1 2)');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new CallExprAST(toLoc(uri, 0, 0, 0, 1), 'f', [
         new NumberExprAST(toLoc(uri, 0, 2, 0, 3), 1),
         new NumberExprAST(toLoc(uri, 0, 4, 0, 5), 2),
@@ -259,7 +266,7 @@ describe('Call', () => {
   it('syntax error: nest', () => {
     const tokenizer = new Tokenizer(uri, 'f(g()');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new CallExprAST(toLoc(uri, 0, 0, 0, 1), 'f', [
         new CallExprAST(toLoc(uri, 0, 2, 0, 3), 'g', []),
       ])
@@ -270,10 +277,140 @@ describe('Call', () => {
   it('error: callee is not a variable', () => {
     const tokenizer = new Tokenizer(uri, '1()');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new CallExprAST(toLoc(uri, 0, 0, 0, 1), '<UNKNOWN!>', [])
     );
     expect(parser.diagnostics[0].message).toBe("'1' is not a function name");
+  });
+});
+
+describe('Infix', () => {
+  it('+', () => {
+    const tokenizer = new Tokenizer(uri, '2 + 3');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
+      new InfixExprAST(
+        toLoc(uri, 0, 2, 0, 3),
+        new NumberExprAST(toLoc(uri, 0, 0, 0, 1), 2),
+        '+',
+        new NumberExprAST(toLoc(uri, 0, 4, 0, 5), 3)
+      )
+    );
+  });
+
+  it('-', () => {
+    const tokenizer = new Tokenizer(uri, '2 - 3');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
+      new InfixExprAST(
+        toLoc(uri, 0, 2, 0, 3),
+        new NumberExprAST(toLoc(uri, 0, 0, 0, 1), 2),
+        '-',
+        new NumberExprAST(toLoc(uri, 0, 4, 0, 5), 3)
+      )
+    );
+  });
+
+  it('*', () => {
+    const tokenizer = new Tokenizer(uri, '2 * 3');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
+      new InfixExprAST(
+        toLoc(uri, 0, 2, 0, 3),
+        new NumberExprAST(toLoc(uri, 0, 0, 0, 1), 2),
+        '*',
+        new NumberExprAST(toLoc(uri, 0, 4, 0, 5), 3)
+      )
+    );
+  });
+
+  it('/', () => {
+    const tokenizer = new Tokenizer(uri, '2 / 3');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
+      new InfixExprAST(
+        toLoc(uri, 0, 2, 0, 3),
+        new NumberExprAST(toLoc(uri, 0, 0, 0, 1), 2),
+        '/',
+        new NumberExprAST(toLoc(uri, 0, 4, 0, 5), 3)
+      )
+    );
+  });
+
+  it('* has higher precedence than +', () => {
+    const tokenizer = new Tokenizer(uri, '2 + 3 * 4');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
+      new InfixExprAST(
+        toLoc(uri, 0, 2, 0, 3),
+        new NumberExprAST(toLoc(uri, 0, 0, 0, 1), 2),
+        '+',
+        new InfixExprAST(
+          toLoc(uri, 0, 6, 0, 7),
+          new NumberExprAST(toLoc(uri, 0, 4, 0, 5), 3),
+          '*',
+          new NumberExprAST(toLoc(uri, 0, 8, 0, 9), 4)
+        )
+      )
+    );
+  });
+
+  it('+ has lower precedence than *', () => {
+    const tokenizer = new Tokenizer(uri, '2 * 3 + 4');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
+      new InfixExprAST(
+        toLoc(uri, 0, 6, 0, 7),
+        new InfixExprAST(
+          toLoc(uri, 0, 2, 0, 3),
+          new NumberExprAST(toLoc(uri, 0, 0, 0, 1), 2),
+          '*',
+          new NumberExprAST(toLoc(uri, 0, 4, 0, 5), 3)
+        ),
+        '+',
+        new NumberExprAST(toLoc(uri, 0, 8, 0, 9), 4)
+      )
+    );
+  });
+
+  it('grouping', () => {
+    const tokenizer = new Tokenizer(uri, '(2)');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
+      new NumberExprAST(toLoc(uri, 0, 1, 0, 2), 2)
+    );
+  });
+
+  it('grouping changes precedence', () => {
+    const tokenizer = new Tokenizer(uri, '2 * (3 + 4)');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
+      new InfixExprAST(
+        toLoc(uri, 0, 2, 0, 3),
+        new NumberExprAST(toLoc(uri, 0, 0, 0, 1), 2),
+        '*',
+        new InfixExprAST(
+          toLoc(uri, 0, 7, 0, 8),
+          new NumberExprAST(toLoc(uri, 0, 5, 0, 6), 3),
+          '+',
+          new NumberExprAST(toLoc(uri, 0, 9, 0, 10), 4)
+        )
+      )
+    );
+  });
+
+  it('syntax error: missing )', () => {
+    const tokenizer = new Tokenizer(uri, '(2 + 3');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
+      new InfixExprAST(
+        toLoc(uri, 0, 3, 0, 4),
+        new NumberExprAST(toLoc(uri, 0, 1, 0, 2), 2),
+        '+',
+        new NumberExprAST(toLoc(uri, 0, 5, 0, 6), 3)
+      )
+    );
+    expect(parser.diagnostics[0].message).toBe("')' is missing");
   });
 });
 
@@ -281,7 +418,7 @@ describe('Expr', () => {
   it('syntax error: unknown prefix', () => {
     const tokenizer = new Tokenizer(uri, ',');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new MissingAST(toLoc(uri, 0, 1, 0, 1))
     );
     expect(parser.diagnostics[0].message).toBe("',' cannot be parsed as an expression");
@@ -292,7 +429,7 @@ describe('Comment', () => {
   it('ignore comment', () => {
     const tokenizer = new Tokenizer(uri, '#foo\n[1]');
     const parser = new Parser(tokenizer);
-    expect(parser.parseExpression(PRESEDENSE.LOWEST)).toStrictEqual(
+    expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new LiteralExprAST(toLoc(uri, 1, 0, 1, 1), [new NumberExprAST(toLoc(uri, 1, 1, 1, 2), 1)])
     );
   });
