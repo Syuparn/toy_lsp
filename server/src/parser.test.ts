@@ -7,6 +7,7 @@ import {
   InfixExprAST,
   LiteralExprAST,
   MissingAST,
+  ModuleAST,
   NumberExprAST,
   ReturnStmtAST,
   VarDeclStmtAST,
@@ -694,5 +695,32 @@ describe('Function', () => {
       new FunctionAST(toLoc(uri, 0, 0, 0, 3), 'f', [], [])
     );
     expect(parser.diagnostics[0].message).toBe("'1' is not an identifier");
+  });
+});
+
+describe('Module', () => {
+  it('empty source code', () => {
+    const tokenizer = new Tokenizer(uri, '');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseModule()).toStrictEqual(new ModuleAST(toLoc(uri, 0, 0, 0, 0), []));
+  });
+
+  it('one function', () => {
+    const tokenizer = new Tokenizer(uri, 'def f() {\n}');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseModule()).toStrictEqual(
+      new ModuleAST(toLoc(uri, 0, 0, 0, 3), [new FunctionAST(toLoc(uri, 0, 0, 0, 3), 'f', [], [])])
+    );
+  });
+
+  it('two functions', () => {
+    const tokenizer = new Tokenizer(uri, 'def f() {\n}\ndef g() {\n}');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseModule()).toStrictEqual(
+      new ModuleAST(toLoc(uri, 0, 0, 0, 3), [
+        new FunctionAST(toLoc(uri, 0, 0, 0, 3), 'f', [], []),
+        new FunctionAST(toLoc(uri, 2, 0, 2, 3), 'g', [], []),
+      ])
+    );
   });
 });

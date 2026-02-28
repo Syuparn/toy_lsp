@@ -8,6 +8,7 @@ import {
   InfixExprAST,
   LiteralExprAST,
   MissingAST,
+  ModuleAST,
   NumberExprAST,
   ReturnStmtAST,
   StmtAST,
@@ -135,6 +136,16 @@ export class Parser {
         },
       },
     };
+  }
+
+  parseModule() {
+    const loc = this.curToken.location; // def
+    const funcs: FunctionAST[] = [];
+    while (!this.match(['EOF'])) {
+      funcs.push(this.parseFunction());
+      this.nextToken();
+    }
+    return new ModuleAST(loc, funcs);
   }
 
   parseFunction() {
