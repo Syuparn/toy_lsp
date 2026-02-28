@@ -50,8 +50,9 @@ export class InfixExprAST {
 export class LiteralExprAST {
   constructor(
     public readonly loc: Location,
-    public readonly values: LiteralExprAST[] | NumberExprAST[],
-    public readonly dims: number[]
+    // NOTE: although literalAST should only contain LiteralExprAST and NumberAST, it accepts all exprs to represent illegal object.
+    // (this violation is checked in static analysis later)
+    public readonly values: (ExprAST | MissingAST)[]
   ) {}
 
   dump(): string {
@@ -63,7 +64,7 @@ export class CallExprAST {
   constructor(
     public readonly loc: Location,
     public readonly callee: string,
-    public readonly args: ExprAST[]
+    public readonly args: (ExprAST | MissingAST)[]
   ) {}
 
   dump(): string {

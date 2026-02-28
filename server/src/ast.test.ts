@@ -45,14 +45,10 @@ describe('ast dump', () => {
   });
 
   it('should dump LiteralExprAST', () => {
-    const ast = new LiteralExprAST(
-      loc,
-      [
-        new LiteralExprAST(loc, [new NumberExprAST(loc, 1), new NumberExprAST(loc, 2)], [2]),
-        new LiteralExprAST(loc, [new NumberExprAST(loc, 3), new NumberExprAST(loc, 4)], [2]),
-      ],
-      [2, 3]
-    );
+    const ast = new LiteralExprAST(loc, [
+      new LiteralExprAST(loc, [new NumberExprAST(loc, 1), new NumberExprAST(loc, 2)]),
+      new LiteralExprAST(loc, [new NumberExprAST(loc, 3), new NumberExprAST(loc, 4)]),
+    ]);
     expect(ast.dump()).toBe('[[1, 2], [3, 4]]');
   });
 
@@ -66,7 +62,7 @@ describe('ast dump', () => {
       loc,
       'foo',
       { shape: [2] },
-      new LiteralExprAST(loc, [new NumberExprAST(loc, 1), new NumberExprAST(loc, 2)], [2])
+      new LiteralExprAST(loc, [new NumberExprAST(loc, 1), new NumberExprAST(loc, 2)])
     );
     expect(ast.dump()).toBe('var foo = [1, 2];');
   });
