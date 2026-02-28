@@ -3,10 +3,13 @@ import { Token, Tokenizer, TokenKind } from './lexer';
 import {
   CallExprAST,
   ExprAST,
+  ExprStmtAST,
   InfixExprAST,
   LiteralExprAST,
   MissingAST,
   NumberExprAST,
+  ReturnStmtAST,
+  VarDeclStmtAST,
   VariableExprAST,
 } from './ast';
 
@@ -130,6 +133,67 @@ export class Parser {
         },
       },
     };
+  }
+
+  parseStatement() {
+    switch (this.curToken.kind) {
+      case 'return':
+        return this.parseReturnStatement();
+      case 'var':
+        return this.parseVarDeclStatement();
+      default:
+        return this.parseExpressionStatement();
+    }
+  }
+
+  parseReturnStatement() {
+    const loc = this.curToken.location;
+    if (this.match([';'])) {
+      this.nextToken(); // current: ;
+      this.nextToken(); // current: next line
+      return new ReturnStmtAST(loc);
+    }
+
+    this.nextToken(); // current: value
+
+    const expr = this.parseExpression(PRESEDENCE.LOWEST);
+    this.expect([';'], "';' is missing");
+    return new ReturnStmtAST(loc, expr);
+  }
+
+  parseVarDeclStatement() {
+    const loc = this.curToken.location;
+    this.expect(['IDENTIFIER'], `'${this.peekToken.text}' is not an identifier`);
+
+    let name = '<UNKNOWN!>';
+    if (this.curToken.kind === 'IDENTIFIER') {
+      const variable = this.parseVariable();
+      name = variable.name;
+    }
+
+    let types: number[] | undefined = undefined;
+    if (this.match(['<'])) {
+      this.nextToken();
+      const exprs = this.parseExpressions('>');
+      if (exprs.every((e) => e instanceof NumberExprAST)) {
+        types = exprs.map((e) => e.value);
+      } else {
+        this.addDiagnostic('type parameter must be numbers');
+      }
+    }
+
+    this.expect(['='], `'=' is missing`);
+    this.nextToken();
+    const expr = this.parseExpression(PRESEDENCE.LOWEST);
+    this.expect([';'], "';' is missing");
+    return new VarDeclStmtAST(loc, name, expr, types);
+  }
+
+  parseExpressionStatement() {
+    const loc = this.curToken.location;
+    const expr = this.parseExpression(PRESEDENCE.LOWEST);
+    this.expect([';'], "';' is missing");
+    return new ExprStmtAST(loc, expr);
   }
 
   parseExpression(precedence: number) {

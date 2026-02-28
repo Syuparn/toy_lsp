@@ -61,8 +61,8 @@ describe('ast dump', () => {
     const ast = new VarDeclStmtAST(
       loc,
       'foo',
-      { shape: [2] },
-      new LiteralExprAST(loc, [new NumberExprAST(loc, 1), new NumberExprAST(loc, 2)])
+      new LiteralExprAST(loc, [new NumberExprAST(loc, 1), new NumberExprAST(loc, 2)]),
+      [2]
     );
     expect(ast.dump()).toBe('var foo = [1, 2];');
   });

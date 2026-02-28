@@ -2,10 +2,13 @@ import { Parser, PRESEDENCE } from './parser';
 import { Tokenizer } from './lexer';
 import {
   CallExprAST,
+  ExprStmtAST,
   InfixExprAST,
   LiteralExprAST,
   MissingAST,
   NumberExprAST,
+  ReturnStmtAST,
+  VarDeclStmtAST,
   VariableExprAST,
 } from './ast';
 
@@ -432,5 +435,170 @@ describe('Comment', () => {
     expect(parser.parseExpression(PRESEDENCE.LOWEST)).toStrictEqual(
       new LiteralExprAST(toLoc(uri, 1, 0, 1, 1), [new NumberExprAST(toLoc(uri, 1, 1, 1, 2), 1)])
     );
+  });
+});
+
+describe('ExpressionStmt', () => {
+  it('parse expression statement', () => {
+    const tokenizer = new Tokenizer(uri, '1;');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseStatement()).toStrictEqual(
+      new ExprStmtAST(toLoc(uri, 0, 0, 0, 1), new NumberExprAST(toLoc(uri, 0, 0, 0, 1), 1))
+    );
+  });
+
+  it('syntax error: missing ;', () => {
+    const tokenizer = new Tokenizer(uri, '1 2');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseStatement()).toStrictEqual(
+      new ExprStmtAST(toLoc(uri, 0, 0, 0, 1), new NumberExprAST(toLoc(uri, 0, 0, 0, 1), 1))
+    );
+    expect(parser.diagnostics[0].message).toBe("';' is missing");
+  });
+});
+
+describe('ReturnStmt', () => {
+  it('parse return statement', () => {
+    const tokenizer = new Tokenizer(uri, 'return 1;');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseStatement()).toStrictEqual(
+      new ReturnStmtAST(toLoc(uri, 0, 0, 0, 6), new NumberExprAST(toLoc(uri, 0, 7, 0, 8), 1))
+    );
+  });
+
+  it('parse return statement (no value)', () => {
+    const tokenizer = new Tokenizer(uri, 'return;');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseStatement()).toStrictEqual(new ReturnStmtAST(toLoc(uri, 0, 0, 0, 6)));
+  });
+
+  it('syntax error: missing ;', () => {
+    const tokenizer = new Tokenizer(uri, 'return 1 2');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseStatement()).toStrictEqual(
+      new ReturnStmtAST(toLoc(uri, 0, 0, 0, 6), new NumberExprAST(toLoc(uri, 0, 7, 0, 8), 1))
+    );
+    expect(parser.diagnostics[0].message).toBe("';' is missing");
+  });
+});
+
+describe('VarDeclStmt', () => {
+  it('parse var decl statement', () => {
+    const tokenizer = new Tokenizer(uri, 'var a = 1;');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseStatement()).toStrictEqual(
+      new VarDeclStmtAST(toLoc(uri, 0, 0, 0, 3), 'a', new NumberExprAST(toLoc(uri, 0, 8, 0, 9), 1))
+    );
+  });
+
+  it('parse var decl statement (with 1-dim type)', () => {
+    const tokenizer = new Tokenizer(uri, 'var a<1> = [2];');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseStatement()).toStrictEqual(
+      new VarDeclStmtAST(
+        toLoc(uri, 0, 0, 0, 3),
+        'a',
+        new LiteralExprAST(toLoc(uri, 0, 11, 0, 12), [
+          new NumberExprAST(toLoc(uri, 0, 12, 0, 13), 2),
+        ]),
+        [1]
+      )
+    );
+  });
+
+  it('parse var decl statement (with 2-dim type)', () => {
+    const tokenizer = new Tokenizer(uri, 'var a<2, 1> = [[3], [4]];');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseStatement()).toStrictEqual(
+      new VarDeclStmtAST(
+        toLoc(uri, 0, 0, 0, 3),
+        'a',
+        new LiteralExprAST(toLoc(uri, 0, 14, 0, 15), [
+          new LiteralExprAST(toLoc(uri, 0, 15, 0, 16), [
+            new NumberExprAST(toLoc(uri, 0, 16, 0, 17), 3),
+          ]),
+          new LiteralExprAST(toLoc(uri, 0, 20, 0, 21), [
+            new NumberExprAST(toLoc(uri, 0, 21, 0, 22), 4),
+          ]),
+        ]),
+        [2, 1]
+      )
+    );
+  });
+
+  it('syntax error: not an identifier', () => {
+    const tokenizer = new Tokenizer(uri, 'var 1 = 1;');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseStatement()).toStrictEqual(
+      new VarDeclStmtAST(
+        toLoc(uri, 0, 0, 0, 3),
+        '<UNKNOWN!>',
+        new MissingAST(toLoc(uri, 0, 5, 0, 5))
+      )
+    );
+    expect(parser.diagnostics[0].message).toBe("'1' is not an identifier");
+  });
+
+  it('syntax error: missing =', () => {
+    const tokenizer = new Tokenizer(uri, 'var a 1;');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseStatement()).toStrictEqual(
+      new VarDeclStmtAST(toLoc(uri, 0, 0, 0, 3), 'a', new NumberExprAST(toLoc(uri, 0, 6, 0, 7), 1))
+    );
+    expect(parser.diagnostics[0].message).toBe("'=' is missing");
+  });
+
+  it('syntax error: missing ;', () => {
+    const tokenizer = new Tokenizer(uri, 'var a = 1 2');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseStatement()).toStrictEqual(
+      new VarDeclStmtAST(toLoc(uri, 0, 0, 0, 3), 'a', new NumberExprAST(toLoc(uri, 0, 8, 0, 9), 1))
+    );
+    expect(parser.diagnostics[0].message).toBe("';' is missing");
+  });
+
+  it('syntax error: missing >', () => {
+    const tokenizer = new Tokenizer(uri, 'var a<1 = [2];');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseStatement()).toStrictEqual(
+      new VarDeclStmtAST(
+        toLoc(uri, 0, 0, 0, 3),
+        'a',
+        new LiteralExprAST(toLoc(uri, 0, 10, 0, 11), [
+          new NumberExprAST(toLoc(uri, 0, 11, 0, 12), 2),
+        ])
+      )
+    );
+    expect(parser.diagnostics[0].message).toBe("'1' cannot be parsed as an infix operator");
+  });
+
+  it('syntax error: missing > (empty)', () => {
+    const tokenizer = new Tokenizer(uri, 'var a< = [2];');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseStatement()).toStrictEqual(
+      new VarDeclStmtAST(
+        toLoc(uri, 0, 0, 0, 3),
+        'a',
+        new LiteralExprAST(toLoc(uri, 0, 9, 0, 10), [
+          new NumberExprAST(toLoc(uri, 0, 10, 0, 11), 2),
+        ])
+      )
+    );
+    expect(parser.diagnostics[0].message).toBe("'=' cannot be parsed as an expression");
+  });
+
+  it('error: type parameter is not a number', () => {
+    const tokenizer = new Tokenizer(uri, 'var a<b> = [2];');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseStatement()).toStrictEqual(
+      new VarDeclStmtAST(
+        toLoc(uri, 0, 0, 0, 3),
+        'a',
+        new LiteralExprAST(toLoc(uri, 0, 11, 0, 12), [
+          new NumberExprAST(toLoc(uri, 0, 12, 0, 13), 2),
+        ])
+      )
+    );
+    expect(parser.diagnostics[0].message).toBe('type parameter must be numbers');
   });
 });

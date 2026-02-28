@@ -1,9 +1,5 @@
 import { Location } from 'vscode-languageserver';
 
-export interface VarType {
-  shape: number[];
-}
-
 export interface AST {
   readonly loc: Location;
   dump(): string;
@@ -76,8 +72,8 @@ export class VarDeclStmtAST {
   constructor(
     public readonly loc: Location,
     public readonly name: string,
-    public readonly varType: VarType,
-    public readonly expr: ExprAST
+    public readonly expr: ExprAST | MissingAST,
+    public readonly varType?: number[]
   ) {}
 
   dump(): string {
@@ -88,7 +84,7 @@ export class VarDeclStmtAST {
 export class ReturnStmtAST {
   constructor(
     public readonly loc: Location,
-    public readonly expr?: ExprAST
+    public readonly expr?: ExprAST | MissingAST
   ) {}
 
   dump(): string {
@@ -102,7 +98,7 @@ export class ReturnStmtAST {
 export class ExprStmtAST {
   constructor(
     public readonly loc: Location,
-    public readonly expr: ExprAST
+    public readonly expr: ExprAST | MissingAST
   ) {}
 
   dump(): string {
