@@ -77,7 +77,7 @@ export class VarDeclStmtAST {
   ) {}
 
   dump(): string {
-    return `var ${this.name} = ${this.expr.dump()};`;
+    return `var ${this.name}${this.varType ? '<' + this.varType.join(', ') + '>' : ''} = ${this.expr.dump()};`;
   }
 }
 

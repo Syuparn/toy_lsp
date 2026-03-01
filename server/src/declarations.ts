@@ -17,7 +17,34 @@ import {
 export class DefinitionFinder {
   constructor(readonly ast: ModuleAST) {}
 
-  find(cursor: Position): Location[] {
+  findDefinition(cursor: Position) {
+    const current = this.findCurrentAST(cursor);
+    if (!current) {
+      // current position is not an identifier
+      return undefined;
+    }
+
+    const { func, expr } = current;
+    // find variables
+    if (expr instanceof VariableExprAST) {
+      const decls = this.findVariableDecl(expr, func);
+      return decls[0]?.dump();
+    }
+
+    // find functions
+    if (expr instanceof CallExprAST) {
+      const decls = this.findFuncDecl(expr);
+      if (decls.length < 1) {
+        return undefined;
+      }
+      const decl = decls[0] as FunctionAST;
+      return `def ${decl.name}(${decl.params.map((p) => p.name).join(', ')})`;
+    }
+
+    return undefined;
+  }
+
+  findLoc(cursor: Position): Location[] {
     const current = this.findCurrentAST(cursor);
     if (!current) {
       // current position is not an identifier
@@ -27,34 +54,34 @@ export class DefinitionFinder {
     const { func, expr } = current;
     // find variables
     if (expr instanceof VariableExprAST) {
-      return this.findVariableDeclLoc(expr, func);
+      return this.findVariableDecl(expr, func).map((e) => e.loc);
     }
 
     // find functions
     if (expr instanceof CallExprAST) {
-      return this.findFuncDeclLoc(expr);
+      return this.findFuncDecl(expr).map((e) => e.loc);
     }
 
     return [];
   }
 
-  findVariableDeclLoc(expr: VariableExprAST, func: FunctionAST): Location[] {
+  findVariableDecl(expr: VariableExprAST, func: FunctionAST): ExprAST[] {
     // NOTE: since toy does not have closure, variable should be defined in the same function
     const param = this.findParam(expr.name, func);
     if (param) {
-      return [param.loc];
+      return [param];
     }
     const variable = this.findVarDecl(expr.name, func);
     if (variable) {
-      return [variable.loc];
+      return [variable];
     }
     return [];
   }
 
-  findFuncDeclLoc(expr: CallExprAST): Location[] {
+  findFuncDecl(expr: CallExprAST): ExprAST[] {
     for (const func of this.ast.funcs) {
       if (func.name === expr.callee) {
-        return [func.loc];
+        return [func];
       }
     }
     return [];

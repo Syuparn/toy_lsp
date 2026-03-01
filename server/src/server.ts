@@ -17,6 +17,7 @@ import {
   SemanticTokensParams,
   DefinitionParams,
   Location,
+  HoverParams,
 } from 'vscode-languageserver/node';
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -69,6 +70,7 @@ connection.onInitialize((params: InitializeParams) => {
         full: true, // semantic tokens for a full document
       },
       definitionProvider: true,
+      hoverProvider: true,
     },
   };
   if (hasWorkspaceFolderCapability) {
@@ -299,7 +301,27 @@ connection.onDefinition((params: DefinitionParams): Location[] => {
   const tokenizer = new Tokenizer(params.textDocument.uri, text);
   const parser = new Parser(tokenizer);
   const ast = parser.parseModule();
-  return new DefinitionFinder(ast).find(params.position);
+  return new DefinitionFinder(ast).findLoc(params.position);
+});
+
+connection.onHover((params: HoverParams) => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) {
+    return null;
+  }
+
+  const text = document.getText();
+  const tokenizer = new Tokenizer(params.textDocument.uri, text);
+  const parser = new Parser(tokenizer);
+  const ast = parser.parseModule();
+  const finder = new DefinitionFinder(ast);
+
+  return {
+    contents: {
+      kind: 'plaintext',
+      value: finder.findDefinition(params.position) ?? '',
+    },
+  };
 });
 
 // Make the text document manager listen on the connection

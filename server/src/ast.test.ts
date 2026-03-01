@@ -61,10 +61,19 @@ describe('ast dump', () => {
     const ast = new VarDeclStmtAST(
       loc,
       'foo',
+      new LiteralExprAST(loc, [new NumberExprAST(loc, 1), new NumberExprAST(loc, 2)])
+    );
+    expect(ast.dump()).toBe('var foo = [1, 2];');
+  });
+
+  it('should dump VarDeclStmtAST (with parameters)', () => {
+    const ast = new VarDeclStmtAST(
+      loc,
+      'foo',
       new LiteralExprAST(loc, [new NumberExprAST(loc, 1), new NumberExprAST(loc, 2)]),
       [2]
     );
-    expect(ast.dump()).toBe('var foo = [1, 2];');
+    expect(ast.dump()).toBe('var foo<2> = [1, 2];');
   });
 
   it('should dump ReturnStmtAST', () => {

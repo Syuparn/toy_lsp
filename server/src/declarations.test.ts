@@ -123,14 +123,102 @@ describe('DefinitionFinder', () => {
     });
   });
 
-  describe('find', () => {
+  describe('findDefinition', () => {
+    it('should return variable declaration dump for variable reference', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\nvar a = 1;\nreturn a;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findDefinition({ line: 2, character: 7 });
+
+      expect(result).toBe('var a = 1;');
+    });
+
+    it('should return parameter name for parameter reference', () => {
+      const tokenizer = new Tokenizer(uri, 'def f(a) {\nreturn a;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findDefinition({ line: 1, character: 7 });
+
+      expect(result).toBe('a');
+    });
+
+    it('should return function signature for function call', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\n}\ndef g() {\nf();\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findDefinition({ line: 3, character: 0 });
+
+      expect(result).toBe('def f()');
+    });
+
+    it('should return function signature with parameters for function call', () => {
+      const tokenizer = new Tokenizer(uri, 'def f(a, b) {\n}\ndef g() {\nf(1, 2);\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findDefinition({ line: 3, character: 0 });
+      expect(result).toBe('def f(a, b)');
+    });
+
+    it('should return undefined when variable is not defined', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\nreturn a;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findDefinition({ line: 1, character: 7 });
+
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined when function is not defined', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\ng();\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findDefinition({ line: 1, character: 0 });
+
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined when cursor is not on identifier', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\nreturn;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findDefinition({ line: 1, character: 0 });
+
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined when cursor is on number literal', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\nreturn 42;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findDefinition({ line: 1, character: 7 });
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('findLoc', () => {
     it('should find variable declaration location', () => {
       const tokenizer = new Tokenizer(uri, 'def f() {\nvar a = 1;\nreturn a;\n}');
       const parser = new Parser(tokenizer);
       const ast = parser.parseModule();
 
       const finder = new DefinitionFinder(ast);
-      const result = finder.find({ line: 2, character: 7 });
+      const result = finder.findLoc({ line: 2, character: 7 });
 
       expect(result).toHaveLength(1);
       expect(result[0]).toStrictEqual(toLoc(uri, 1, 0, 1, 3));
@@ -142,7 +230,7 @@ describe('DefinitionFinder', () => {
       const ast = parser.parseModule();
 
       const finder = new DefinitionFinder(ast);
-      const result = finder.find({ line: 3, character: 7 });
+      const result = finder.findLoc({ line: 3, character: 7 });
 
       expect(result).toHaveLength(1);
       expect(result[0]).toStrictEqual(toLoc(uri, 2, 0, 2, 3));
@@ -154,7 +242,7 @@ describe('DefinitionFinder', () => {
       const ast = parser.parseModule();
 
       const finder = new DefinitionFinder(ast);
-      const result = finder.find({ line: 1, character: 7 });
+      const result = finder.findLoc({ line: 1, character: 7 });
 
       expect(result).toHaveLength(1);
       expect(result[0]).toStrictEqual(toLoc(uri, 0, 6, 0, 7));
@@ -166,7 +254,7 @@ describe('DefinitionFinder', () => {
       const ast = parser.parseModule();
 
       const finder = new DefinitionFinder(ast);
-      const result = finder.find({ line: 3, character: 0 });
+      const result = finder.findLoc({ line: 3, character: 0 });
 
       expect(result).toHaveLength(1);
       expect(result[0]).toStrictEqual(toLoc(uri, 0, 0, 0, 3));
@@ -178,7 +266,7 @@ describe('DefinitionFinder', () => {
       const ast = parser.parseModule();
 
       const finder = new DefinitionFinder(ast);
-      const result = finder.find({ line: 1, character: 7 });
+      const result = finder.findLoc({ line: 1, character: 7 });
 
       expect(result).toHaveLength(0);
     });
@@ -189,7 +277,7 @@ describe('DefinitionFinder', () => {
       const ast = parser.parseModule();
 
       const finder = new DefinitionFinder(ast);
-      const result = finder.find({ line: 1, character: 0 });
+      const result = finder.findLoc({ line: 1, character: 0 });
 
       expect(result).toHaveLength(0);
     });
