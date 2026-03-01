@@ -1,0 +1,197 @@
+import { Location } from 'vscode-languageserver';
+import { Parser } from './parser';
+import { Tokenizer } from './lexer';
+import { DefinitionFinder } from './declarations';
+import { CallExprAST, NumberExprAST, VariableExprAST } from './ast';
+
+const uri = 'test://test.toy';
+
+// helper function to create loc
+function toLoc(
+  uri: string,
+  startLine: number,
+  startCharacter: number,
+  endLine: number,
+  endCharacter: number
+): Location {
+  return {
+    uri: uri,
+    range: {
+      start: {
+        line: startLine,
+        character: startCharacter,
+      },
+      end: {
+        line: endLine,
+        character: endCharacter,
+      },
+    },
+  };
+}
+
+describe('DefinitionFinder', () => {
+  describe('findCurrentAST', () => {
+    it('should find variable expression at cursor position', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\nreturn a;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findCurrentAST({ line: 1, character: 7 });
+
+      expect(result).toBeDefined();
+      expect(result?.func.name).toBe('f');
+      expect(result?.expr).toBeInstanceOf(VariableExprAST);
+      expect((result?.expr as VariableExprAST).name).toBe('a');
+    });
+
+    it('should find call expression at cursor position', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\ng();\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findCurrentAST({ line: 1, character: 0 });
+
+      expect(result).toBeDefined();
+      expect(result?.func.name).toBe('f');
+      expect(result?.expr).toBeInstanceOf(CallExprAST);
+      expect((result?.expr as CallExprAST).callee).toBe('g');
+    });
+
+    it('should find parameter at cursor position', () => {
+      const tokenizer = new Tokenizer(uri, 'def f(a) {\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findCurrentAST({ line: 0, character: 6 });
+
+      expect(result).toBeDefined();
+      expect(result?.func.name).toBe('f');
+      expect(result?.expr).toBeInstanceOf(VariableExprAST);
+      expect((result?.expr as VariableExprAST).name).toBe('a');
+    });
+
+    it('should find nested expression (argument in call)', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\ng(a);\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findCurrentAST({ line: 1, character: 2 });
+
+      expect(result).toBeDefined();
+      expect(result?.expr).toBeInstanceOf(VariableExprAST);
+      expect((result?.expr as VariableExprAST).name).toBe('a');
+    });
+
+    it('should return void when cursor is outside any function', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\n}\n');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findCurrentAST({ line: 2, character: 0 });
+
+      expect(result).toBeUndefined();
+    });
+
+    it('should return void when cursor is on non-expression token', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\nreturn;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      // cursor on 'return' keyword
+      const result = finder.findCurrentAST({ line: 1, character: 0 });
+
+      expect(result).toBeUndefined();
+    });
+
+    it('should find expression in correct function when multiple functions exist', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\nreturn 1;\n}\ndef g() {\nreturn 2;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findCurrentAST({ line: 4, character: 7 });
+
+      expect(result).toBeDefined();
+      expect(result?.func.name).toBe('g');
+      expect(result?.expr).toBeInstanceOf(NumberExprAST);
+    });
+  });
+
+  describe('find', () => {
+    it('should find variable declaration location', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\nvar a = 1;\nreturn a;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.find({ line: 2, character: 7 });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toStrictEqual(toLoc(uri, 1, 0, 1, 3));
+    });
+
+    it('should find variable declaration location (two variables)', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\nvar a = 1;\nvar b = 2;\nreturn b;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.find({ line: 3, character: 7 });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toStrictEqual(toLoc(uri, 2, 0, 2, 3));
+    });
+
+    it('should find parameter declaration location', () => {
+      const tokenizer = new Tokenizer(uri, 'def f(a) {\nreturn a;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.find({ line: 1, character: 7 });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toStrictEqual(toLoc(uri, 0, 6, 0, 7));
+    });
+
+    it('should find function declaration location', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\n}\ndef g() {\nf();\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.find({ line: 3, character: 0 });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toStrictEqual(toLoc(uri, 0, 0, 0, 3));
+    });
+
+    it('should return empty array when no definition found', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\nreturn a;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.find({ line: 1, character: 7 });
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should return empty array when cursor is not on identifier', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.find({ line: 1, character: 0 });
+
+      expect(result).toHaveLength(0);
+    });
+  });
+});

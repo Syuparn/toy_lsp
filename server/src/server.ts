@@ -15,12 +15,15 @@ import {
   type DocumentDiagnosticReport,
   SemanticTokensBuilder,
   SemanticTokensParams,
+  DefinitionParams,
+  Location,
 } from 'vscode-languageserver/node';
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
 
 import { tokenizeAll, Tokenizer, TokenKind } from './lexer';
 import { Parser, ToyDiagnostic } from './parser';
+import { DefinitionFinder } from './declarations';
 
 // Create a connection for the server, using Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
@@ -65,6 +68,7 @@ connection.onInitialize((params: InitializeParams) => {
         legend,
         full: true, // semantic tokens for a full document
       },
+      definitionProvider: true,
     },
   };
   if (hasWorkspaceFolderCapability) {
@@ -170,7 +174,7 @@ async function validateTextDocument(textDocument: TextDocument): Promise<Diagnos
   const diagnostics: Diagnostic[] = parser.diagnostics
     .slice(0, settings.maxNumberOfProblems)
     .map((d: ToyDiagnostic) => ({
-      severity: DiagnosticSeverity.Warning,
+      severity: DiagnosticSeverity.Error,
       range: d.location.range,
       message: d.message,
       source: 'ex',
@@ -283,6 +287,19 @@ connection.onCompletionResolve((item: CompletionItem): CompletionItem => {
     item.documentation = 'JavaScript documentation';
   }
   return item;
+});
+
+connection.onDefinition((params: DefinitionParams): Location[] => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) {
+    return [];
+  }
+
+  const text = document.getText();
+  const tokenizer = new Tokenizer(params.textDocument.uri, text);
+  const parser = new Parser(tokenizer);
+  const ast = parser.parseModule();
+  return new DefinitionFinder(ast).find(params.position);
 });
 
 // Make the text document manager listen on the connection

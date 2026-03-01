@@ -1,1 +1,1 @@
-{"root":["./src/ast.test.ts","./src/ast.ts","./src/lexer.test.ts","./src/lexer.ts","./src/parser.test.ts","./src/parser.ts","./src/server.ts"],"version":"5.9.3"}
+{"root":["./src/ast.test.ts","./src/ast.ts","./src/declarations.test.ts","./src/declarations.ts","./src/lexer.test.ts","./src/lexer.ts","./src/parser.test.ts","./src/parser.ts","./src/server.ts"],"version":"5.9.3"}
