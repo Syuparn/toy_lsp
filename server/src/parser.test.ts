@@ -696,6 +696,20 @@ describe('Function', () => {
     );
     expect(parser.diagnostics[0].message).toBe("'1' is not an identifier");
   });
+
+  it('syntax error: toy does not have closure', () => {
+    const tokenizer = new Tokenizer(uri, 'def f() {\ndef g() {}\n}');
+    const parser = new Parser(tokenizer);
+    expect(parser.parseFunction()).toStrictEqual(
+      new FunctionAST(
+        toLoc(uri, 0, 0, 0, 3),
+        'f',
+        [],
+        [new ExprStmtAST(toLoc(uri, 1, 0, 1, 3), new MissingAST(toLoc(uri, 1, 0, 1, 3)))]
+      )
+    );
+    expect(parser.diagnostics[0].message).toBe('function cannot be defined inside functions');
+  });
 });
 
 describe('Module', () => {

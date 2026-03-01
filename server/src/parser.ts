@@ -226,6 +226,14 @@ export class Parser {
         return this.parseReturnStatement();
       case 'var':
         return this.parseVarDeclStatement();
+      case 'def': {
+        const loc = this.curToken.location;
+        this.addDiagnostic('function cannot be defined inside functions');
+        while (!this.match(['}'])) {
+          this.nextToken();
+        }
+        return new ExprStmtAST(loc, new MissingAST(loc));
+      }
       default:
         return this.parseExpressionStatement();
     }
