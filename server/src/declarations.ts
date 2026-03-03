@@ -13,9 +13,63 @@ import {
   VarDeclStmtAST,
   VariableExprAST,
 } from './ast';
+import { TokenKind } from './lexer';
 
 export class DefinitionFinder {
   constructor(readonly ast: ModuleAST) {}
+
+  builtInFuncNames() {
+    return ['print', 'transpose'];
+  }
+
+  findCompletions(cursor: Position) {
+    const current = this.findCurrentAST(cursor);
+    if (!current) {
+      // current position is not an identifier
+      return [];
+    }
+
+    const { func, expr } = current;
+    if (!(expr instanceof VariableExprAST)) {
+      return [];
+    }
+
+    const completions: {
+      name: string;
+      kind: TokenKind;
+    }[] = [];
+
+    // completion search pattern (partial match to the input identifier)
+    // i.e. "foo" -> /.*f.*o.*o.*/
+    const pattern = new RegExp('.*' + [expr.name].join('.*') + '.*');
+
+    // find all variables and parameters in the current function
+    const allVars = this.findAllVariablesInFunc(func);
+    for (const varDecl of allVars) {
+      if (varDecl instanceof VariableExprAST && varDecl.name.match(pattern)) {
+        completions.push({ name: varDecl.name, kind: 'IDENTIFIER' });
+      }
+      if (varDecl instanceof VarDeclStmtAST && varDecl.name.match(pattern)) {
+        completions.push({ name: varDecl.name, kind: 'IDENTIFIER' });
+      }
+    }
+
+    // NOTE: does not handle CallExprAST because you are only typing callee (not args) at this point
+    // find functions
+    for (const f of this.ast.funcs) {
+      if (f.name.match(pattern)) {
+        completions.push({ name: f.name, kind: 'def' });
+      }
+    }
+    // find built-in functions
+    for (const name of this.builtInFuncNames()) {
+      if (name.match(pattern)) {
+        completions.push({ name: name, kind: 'def' });
+      }
+    }
+
+    return completions;
+  }
 
   findDefinition(cursor: Position) {
     const current = this.findCurrentAST(cursor);
@@ -101,6 +155,19 @@ export class DefinitionFinder {
         return stmt;
       }
     }
+  }
+
+  findAllVariablesInFunc(func: FunctionAST): (VariableExprAST | VarDeclStmtAST)[] {
+    const result: (VariableExprAST | VarDeclStmtAST)[] = [];
+    for (const param of func.params) {
+      result.push(param);
+    }
+    for (const stmt of func.body) {
+      if (stmt instanceof VarDeclStmtAST) {
+        result.push(stmt);
+      }
+    }
+    return result;
   }
 
   findCurrentAST(cursor: Position): { func: FunctionAST; expr: ExprAST } | void {

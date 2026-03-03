@@ -282,4 +282,125 @@ describe('DefinitionFinder', () => {
       expect(result).toHaveLength(0);
     });
   });
+
+  describe('findCompletions', () => {
+    it('should return completions for variable declaration', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\nvar abc = 1;\na;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findCompletions({ line: 2, character: 0 });
+
+      expect(result).toContainEqual({ name: 'abc', kind: 'IDENTIFIER' });
+    });
+
+    it('should return completions for parameter', () => {
+      const tokenizer = new Tokenizer(uri, 'def f(abc) {\na;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findCompletions({ line: 1, character: 0 });
+
+      expect(result).toContainEqual({ name: 'abc', kind: 'IDENTIFIER' });
+    });
+
+    it('should return completions for user-defined function', () => {
+      const tokenizer = new Tokenizer(uri, 'def foo() {\n}\ndef g() {\nf;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findCompletions({ line: 3, character: 0 });
+
+      expect(result).toContainEqual({ name: 'foo', kind: 'def' });
+    });
+
+    it('should return completions for built-in functions', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\np;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findCompletions({ line: 1, character: 0 });
+
+      expect(result).toContainEqual({ name: 'print', kind: 'def' });
+    });
+
+    it('should return multiple function completions matching the pattern', () => {
+      const tokenizer = new Tokenizer(
+        uri,
+        'def apple() {\n}\ndef apricot() {\n}\ndef xyz() {\n}\ndef main() {\na;\n}'
+      );
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      // line 7 is "a;", pattern is .*a.* which matches names containing 'a'
+      const result = finder.findCompletions({ line: 7, character: 0 });
+
+      expect(result).toContainEqual({ name: 'apple', kind: 'def' });
+      expect(result).toContainEqual({ name: 'apricot', kind: 'def' });
+      expect(result).toContainEqual({ name: 'main', kind: 'def' });
+      expect(result).not.toContainEqual({ name: 'xyz', kind: 'def' });
+    });
+
+    it('should return empty array when cursor is not on identifier', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\nreturn;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findCompletions({ line: 1, character: 0 });
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should return empty array when cursor is on number literal', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\nreturn 42;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findCompletions({ line: 1, character: 7 });
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should return empty array when cursor is outside function', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\n}\n');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findCompletions({ line: 2, character: 0 });
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should include both variables and functions in completions', () => {
+      const tokenizer = new Tokenizer(uri, 'def foo() {\n}\ndef g(foo) {\nfoo;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      // line 3 is "foo;"
+      const result = finder.findCompletions({ line: 3, character: 0 });
+
+      expect(result).toContainEqual({ name: 'foo', kind: 'def' });
+      expect(result).toContainEqual({ name: 'foo', kind: 'IDENTIFIER' });
+    });
+
+    it('should return all built-in functions when pattern matches', () => {
+      const tokenizer = new Tokenizer(uri, 'def f() {\nt;\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findCompletions({ line: 1, character: 0 });
+
+      expect(result).toContainEqual({ name: 'transpose', kind: 'def' });
+    });
+  });
 });
