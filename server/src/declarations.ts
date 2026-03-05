@@ -87,6 +87,15 @@ export class DefinitionFinder {
 
     // find functions
     if (expr instanceof CallExprAST) {
+      // built-in functions
+      if (expr.callee === 'print') {
+        return 'def print(x)';
+      }
+      if (expr.callee === 'transpose') {
+        return 'def transpose(x)';
+      }
+
+      // user-defined functions
       const decls = this.findFuncDecl(expr);
       if (decls.length < 1) {
         return undefined;

@@ -177,6 +177,24 @@ describe('DefinitionFinder', () => {
       expect(result).toBeUndefined();
     });
 
+    it('should return function signature for built-in function call print', () => {
+      const tokenizer = new Tokenizer(uri, 'def f(a, b) {\nprint(1);\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findDefinition({ line: 1, character: 0 });
+      expect(result).toBe('def print(x)');
+    });
+
+    it('should return function signature for built-in function call transpose', () => {
+      const tokenizer = new Tokenizer(uri, 'def f(a, b) {\ntranspose(1);\n}');
+      const parser = new Parser(tokenizer);
+      const ast = parser.parseModule();
+      const finder = new DefinitionFinder(ast);
+      const result = finder.findDefinition({ line: 1, character: 0 });
+      expect(result).toBe('def transpose(x)');
+    });
+
     it('should return undefined when function is not defined', () => {
       const tokenizer = new Tokenizer(uri, 'def f() {\ng();\n}');
       const parser = new Parser(tokenizer);
